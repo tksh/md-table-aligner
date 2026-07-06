@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <title>MD Table Aligner</title>
+    <style>
+    :root {
+      --bg: #14161a;
+      --panel: #1b1e24;
+      --panel-2: #22262e;
+      --border: #2d323c;
+      --text: #e4e6eb;
+      --text-dim: #8b93a1;
+      --accent: #5eb3a3;
+      --accent-dim: #3a6d63;
+      --warn: #d99a5e;
+      --mono-tag: #5e8fd9;
+      --prop-tag: #b17fd6;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      min-height: 100vh;
+    }
+    header {
+      padding: 20px 28px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      font-size: 16px;
+      margin: 0 0 4px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    header p {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--text-dim);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 0;
+      min-height: calc(100vh - 68px);
+    }
+    .sidebar {
+      border-right: 1px solid var(--border);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .field label {
+      display: block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+      margin-bottom: 7px;
+    }
+    select,
+    input[type="number"],
+    button,
+    textarea {
+      font-family: inherit;
+      font-size: 13px;
+    }
+    select {
+      width: 100%;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 9px;
+    }
+    select optgroup {
+      color: var(--text-dim);
+      font-style: normal;
+    }
+    select option {
+      color: var(--text);
+    }
+    .btn {
+      width: 100%;
+      background: var(--accent-dim);
+      color: #eafff9;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 9px 10px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.15s;
+    }
+    .btn:hover {
+      background: var(--accent);
+      color: #0d1a17;
+    }
+    .btn.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn.secondary:hover {
+      border-color: var(--text-dim);
+    }
+    .row2 {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    input[type="number"] {
+      width: 70px;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 9px;
+    }
+    .status {
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.6;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .status b {
+      color: var(--text);
+    }
+    .tag {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+      vertical-align: 1px;
+    }
+    .tag.mono {
+      background: rgba(94,143,217,0.18);
+      color: var(--mono-tag);
+    }
+    .tag.prop {
+      background: rgba(177,127,214,0.18);
+      color: var(--prop-tag);
+    }
+    .main {
+      padding: 20px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .pane-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+    }
+    textarea {
+      width: 100%;
+      min-height: 200px;
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      resize: vertical;
+      line-height: 1.6;
+      white-space: pre;
+    }
+    pre#preview {
+      width: 100%;
+      min-height: 200px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      margin: 0;
+      overflow-x: auto;
+      line-height: 1.6;
+      white-space: pre;
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+    }
+    .toolbar .btn {
+      width: auto;
+      padding: 8px 16px;
+    }
+    footer {
+      padding: 10px 28px;
+      font-size: 11.5px;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border);
+    }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>MD Table Aligner</h1>
+      <p>ローカルフォントを使って、日英混在の等幅テーブルをプレビューしながら列幅を揃えます</p>
+    </header>
+
+    <div class="layout">
+      <div class="sidebar">
+        <div class="field">
+          <label>フォント読み込み</label>
+          <button class="btn"
+            id="loadFontsBtn">ローカルフォントを読み込む</button>
+        </div>
+
+        <div class="field">
+          <label>フォント選択</label>
+          <select id="fontSelect" disabled>
+            <option>まずローカルフォントを読み込んでください</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>表示サイズ</label>
+          <div class="row2">
+            <input type="number" id="fontSize" value="15" min="8" max="40">
+            <span style="color:var(--text-dim); font-size:12px;">px</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <button class="btn" id="alignBtn">列幅を揃える</button>
+        </div>
+
+        <div class="field">
+          <button class="btn secondary" id="copyBtn">整形結果をコピー</button>
+        </div>
+
+        <div class="status" id="status">
+      フォント未読み込み。Chrome / Edge のデスクトップ版で動作します（初回はローカルフォントへのアクセス許可が必要です）。
+    </div>
+      </div>
+
+      <div class="main">
+        <div>
+          <div class="pane-label"
+            style="margin-bottom:6px;">入力（生のMarkdown）</div>
+          <textarea id="input" spellcheck="false">| 名前 | 説明 | 値 |
+|---|---|---|
+| id | 識別子 | 1 |
+| name | 表示名です | "sample" |
+| flag_enabled | 有効フラグ（true/false） | true |
+| ratio日英幅比 | 日本語と英語の幅の比率 | 3:5 |
+</textarea>
+        </div>
+        <div>
+          <div class="pane-label"
+            style="margin-bottom:6px;">プレビュー（選択フォントで表示）</div>
+          <pre
+            id="preview">フォントを選択すると、ここに選択フォントでの表示が反映されます。</pre>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+  等幅判定・日英幅比は実際の描画幅を Canvas で測定して算出しています（フォントの内部フラグには依存しません）。
+    </footer>
+
+    <script>
+    const loadFontsBtn = document.getElementById("loadFontsBtn");
+    const fontSelect = document.getElementById("fontSelect");
+    const fontSizeInput = document.getElementById("fontSize");
+    const alignBtn = document.getElementById("alignBtn");
+    const copyBtn = document.getElementById("copyBtn");
+    const statusEl = document.getElementById("status");
+    const input = document.getElementById("input");
+    const preview = document.getElementById("preview");
+
+    let fontMeta = {}; // family -> { monospace, ratio, ratioLabel }
+    const measureCanvas = document.createElement("canvas");
+    const mctx = measureCanvas.getContext("2d");
+
+    // --- 等幅判定（アルファベット部分の実測） ---
+    function isMonospaceAlphabet(fontFamily, size) {
+      mctx.font = `${size}px "${fontFamily}"`;
+      const testChars = ["i", "l", "W", "M", "0", ".", "x", "A"];
+      const widths = testChars.map((ch) => mctx.measureText(ch).width);
+      const first = widths[0];
+      const tolerance = 0.05;
+      return widths.every((w) => Math.abs(w - first) < tolerance);
+    }
+
+    // --- 日英幅比の実測 ---
+    function measureJaEnRatio(fontFamily, size) {
+      mctx.font = `${size}px "${fontFamily}"`;
+      const enWidth = mctx.measureText("M").width;
+      const jaWidth = mctx.measureText("あ").width;
+      if (enWidth === 0) return null;
+      return jaWidth / enWidth;
+    }
+
+    // 実数比を分母20以下の簡単な分数に近似する（連分数）
+    function approximateFraction(x, maxDenom = 20) {
+      let bestNum = 1, bestDen = 1, bestErr = Infinity;
+      for (let den = 1; den <= maxDenom; den++) {
+        const num = Math.round(x * den);
+        if (num <= 0) continue;
+        const err = Math.abs(num / den - x);
+        if (err < bestErr) {
+          bestErr = err;
+          bestNum = num;
+          bestDen = den;
+        }
+      }
+      return `${bestNum}:${bestDen}`;
+    }
+
+    async function loadFonts() {
+      if (!window.queryLocalFonts) {
+        statusEl.textContent =
+          "このブラウザは Local Font Access API に対応していません（Chrome / Edge のデスクトップ版をお使いください）。";
+        return;
+      }
+      statusEl.textContent =
+        "読み込み中…（権限プロンプトが出た場合は許可してください）";
+      try {
+        const fonts = await window.queryLocalFonts();
+        const size = parseInt(fontSizeInput.value, 10) || 15;
+
+        // familyごとに重複を除きつつメタ情報を計算
+        const families = [...new Set(fonts.map((f) => f.family))];
+        const loadedFamilies = [];
+        let failCount = 0;
+
+        for (const fontData of fonts) {
+          try {
+            const face = new FontFace(
+              fontData.postscriptName,
+              await fontData.blob(),
+            );
+            await face.load();
+            document.fonts.add(face);
+          } catch (e) {
+            failCount++;
+          }
+        }
+        await document.fonts.ready;
+
+        for (const family of families) {
+          const mono = isMonospaceAlphabet(family, size);
+          let ratio = null, ratioLabel = null;
+          if (mono) {
+            ratio = measureJaEnRatio(family, size);
+            if (ratio && ratio > 1.05) {
+              ratioLabel = approximateFraction(ratio, 20);
+            }
+          }
+          fontMeta[family] = { monospace: mono, ratio, ratioLabel };
+        }
+
+        populateFontSelect(families);
+        fontSelect.disabled = false;
+        statusEl.innerHTML =
+          `<b>${families.length}</b> 種類のフォントを読み込みました。等幅: <b>${
+            families.filter((f) => fontMeta[f].monospace).length
+          }</b> 件${failCount ? `（${failCount}件は読み込み失敗）` : ""}`;
+        updatePreview();
+      } catch (e) {
+        statusEl.textContent = `取得に失敗しました: ${e.name} - ${e.message}`;
+      }
+    }
+
+    function populateFontSelect(families) {
+      const monoFonts = families.filter((f) => fontMeta[f].monospace)
+        .sort((a, b) => a.localeCompare(b, "ja"));
+      const propFonts = families.filter((f) => !fontMeta[f].monospace)
+        .sort((a, b) => a.localeCompare(b, "ja"));
+
+      fontSelect.innerHTML = "";
+
+      const monoGroup = document.createElement("optgroup");
+      monoGroup.label = `等幅 (${monoFonts.length})`;
+      for (const f of monoFonts) {
+        const opt = document.createElement("option");
+        opt.value = f;
+        const label = fontMeta[f].ratioLabel
+          ? `${f}  [日英 ${fontMeta[f].ratioLabel}]`
+          : f;
+        opt.textContent = label;
+        monoGroup.appendChild(opt);
+      }
+      fontSelect.appendChild(monoGroup);
+
+      const propGroup = document.createElement("optgroup");
+      propGroup.label = `プロポーショナル (${propFonts.length})`;
+      for (const f of propFonts) {
+        const opt = document.createElement("option");
+        opt.value = f;
+        opt.textContent = f;
+        propGroup.appendChild(opt);
+      }
+      fontSelect.appendChild(propGroup);
+
+      if (monoFonts.length) fontSelect.value = monoFonts[0];
+    }
+
+    function currentFont() {
+      const size = parseInt(fontSizeInput.value, 10) || 15;
+      const family = fontSelect.value;
+      return { family, size };
+    }
+
+    function updatePreview() {
+      const { family, size } = currentFont();
+      if (!family) return;
+      preview.style.fontFamily = `"${family}"`;
+      preview.style.fontSize = size + "px";
+      preview.textContent = input.value;
+    }
+
+    // --- Markdown テーブルの列幅そろえ ---
+    function isSeparatorRow(cells) {
+      return cells.every((c) => /^:?-+:?$/.test(c.trim()));
+    }
+
+    function alignMarkdownTable(text, family, size) {
+      mctx.font = `${size}px "${family}"`;
+      const lines = text.split("\n");
+
+      // テーブル行（| を含む行）のインデックスをまとめてブロック単位で処理
+      const rows = [];
+      const lineIndices = [];
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.includes("|") && line.trim() !== "") {
+          const cells = line.split("|");
+          // 先頭・末尾の空セル（| で始まる/終わる場合）を除去
+          if (cells[0].trim() === "") cells.shift();
+          if (cells.length && cells[cells.length - 1].trim() === "") cells.pop();
+          rows.push(cells.map((c) => c.trim()));
+          lineIndices.push(i);
+        }
+      }
+      if (rows.length === 0) return text;
+
+      const sepRowIdx = rows.findIndex(isSeparatorRow);
+      const colCount = Math.max(...rows.map((r) => r.length));
+
+      // 各セルのアラインメント指定（left/center/right/none）を separator から取得
+      const aligns = new Array(colCount).fill("none");
+      if (sepRowIdx >= 0) {
+        rows[sepRowIdx].forEach((c, idx) => {
+          const t = c.trim();
+          if (/^:-+:$/.test(t)) aligns[idx] = "center";
+          else if (/^:-+$/.test(t)) aligns[idx] = "left";
+          else if (/^-+:$/.test(t)) aligns[idx] = "right";
+        });
+      }
+
+      // 各列の最大表示幅を実測
+      const spaceWidth = mctx.measureText(" ").width;
+      const colWidths = new Array(colCount).fill(0);
+      rows.forEach((r, ri) => {
+        if (ri === sepRowIdx) return;
+        r.forEach((c, ci) => {
+          const w = mctx.measureText(c).width;
+          if (w > colWidths[ci]) colWidths[ci] = w;
+        });
+      });
+      // 最低幅（ダッシュ3個分など）を確保
+      const minDashWidth = mctx.measureText("---").width;
+      for (let i = 0; i < colCount; i++) {
+        if (colWidths[i] < minDashWidth) colWidths[i] = minDashWidth;
+      }
+
+      function padCell(content, targetWidth, align) {
+        const contentWidth = mctx.measureText(content).width;
+        let extra = Math.max(0, targetWidth - contentWidth);
+        let extraSpaces = Math.round(extra / spaceWidth);
+        if (align === "right") {
+          return " ".repeat(extraSpaces + 1) + content + " ";
+        } else if (align === "center") {
+          const left = Math.floor(extraSpaces / 2);
+          const right = extraSpaces - left;
+          return " ".repeat(left + 1) + content + " ".repeat(right + 1);
+        } else {
+          return " " + content + " ".repeat(extraSpaces + 1);
+        }
+      }
+
+      function buildSeparatorCell(width, align) {
+        const dashWidth = mctx.measureText("-").width;
+        let dashCount = Math.max(3, Math.round(width / dashWidth));
+        // コロン分の幅を差し引く
+        if (align === "center") dashCount = Math.max(1, dashCount - 2);
+        else if (align !== "none") dashCount = Math.max(1, dashCount - 1);
+        const dashes = "-".repeat(dashCount);
+        if (align === "center") return ` :${dashes}: `;
+        if (align === "left") return ` :${dashes} `;
+        if (align === "right") return ` ${dashes}: `;
+        return " " + dashes + " ";
+      }
+
+      const outRows = rows.map((r, ri) => {
+        const cells = [];
+        for (let ci = 0; ci < colCount; ci++) {
+          const raw = r[ci] !== undefined ? r[ci] : "";
+          if (ri === sepRowIdx) {
+            cells.push(buildSeparatorCell(colWidths[ci], aligns[ci]));
+          } else {
+            cells.push(padCell(raw, colWidths[ci], aligns[ci]));
+          }
+        }
+        return "|" + cells.join("|") + "|";
+      });
+
+      const newLines = [...lines];
+      lineIndices.forEach((lineIdx, i) => {
+        newLines[lineIdx] = outRows[i];
+      });
+      return newLines.join("\n");
+    }
+
+    // --- イベント ---
+    loadFontsBtn.addEventListener("click", loadFonts);
+    fontSelect.addEventListener("change", updatePreview);
+    fontSizeInput.addEventListener("change", updatePreview);
+    input.addEventListener("input", updatePreview);
+
+    alignBtn.addEventListener("click", () => {
+      const { family, size } = currentFont();
+      if (!family) {
+        statusEl.textContent = "フォントを選択してください。";
+        return;
+      }
+      input.value = alignMarkdownTable(input.value, family, size);
+      updatePreview();
+    });
+
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(input.value);
+        statusEl.textContent = "クリップボードにコピーしました。";
+      } catch (e) {
+        statusEl.textContent = "コピーに失敗しました。手動で選択してください。";
+      }
+    });
+    </script>
+  </body>
+</html>
