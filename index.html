@@ -25,7 +25,10 @@
       background: var(--bg);
       color: var(--text);
       font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
-      min-height: 100vh;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
     header {
       padding: 20px 28px 14px;
@@ -42,11 +45,22 @@
       font-size: 12.5px;
       color: var(--text-dim);
     }
+    .content-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+    footer {
+      flex-shrink: 0;
+    }
     .layout {
+      flex: 1;
       display: grid;
       grid-template-columns: 300px 1fr;
       gap: 0;
-      min-height: calc(100vh - 68px);
+      min-height: 0;
     }
     .sidebar {
       border-right: 1px solid var(--border);
@@ -54,6 +68,7 @@
       display: flex;
       flex-direction: column;
       gap: 18px;
+      overflow-y: auto;
     }
     .tabs {
       display: flex;
@@ -231,6 +246,13 @@
       display: flex;
       flex-direction: column;
       gap: 14px;
+      overflow: hidden;
+    }
+    .main > div {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
     }
     .pane-label {
       font-size: 11px;
@@ -240,25 +262,28 @@
     }
     textarea {
       width: 100%;
-      min-height: 200px;
+      flex: 1;
+      min-height: 0;
       background: var(--panel);
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 14px;
-      resize: vertical;
+      resize: none;
       line-height: 1.6;
       white-space: pre;
+      overflow: auto;
     }
     pre#preview {
       width: 100%;
-      min-height: 200px;
+      flex: 1;
+      min-height: 0;
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 14px;
       margin: 0;
-      overflow-x: auto;
+      overflow: auto;
       line-height: 1.6;
       white-space: pre;
     }
@@ -276,8 +301,9 @@
       <p>ローカルフォントを使って、日英混在の等幅テーブルをプレビューしながら列幅を揃えます</p>
     </header>
 
-    <div class="layout">
-      <div class="sidebar">
+    <div class="content-wrapper">
+      <div class="layout">
+        <div class="sidebar">
         <div class="tabs" role="tablist">
           <button class="tab-btn active" id="tabFontBtn" role="tab"
             aria-selected="true" aria-controls="panelFont">フォント実測</button>
@@ -361,6 +387,7 @@
           <pre id="preview">フォントを選択すると、ここに選択フォントでの表示が反映されます。</pre>
         </div>
       </div>
+    </div>
     </div>
 
     <footer>
