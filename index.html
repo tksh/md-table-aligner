@@ -390,6 +390,7 @@
     const localFontsSupported = !!window.queryLocalFonts;
     let activeTab = "font";
     let fontMeta = {};
+    let alignedResult = null;
     const measureCanvas = document.createElement("canvas");
     const mctx = measureCanvas.getContext("2d");
 
@@ -575,7 +576,7 @@
     function updatePreview() {
       const size = clampFontSize(fontSizeInput.value);
       preview.style.fontSize = size + "px";
-      preview.textContent = input.value;
+      preview.textContent = alignedResult !== null ? alignedResult : input.value;
 
       if (activeTab === "font") {
         const { family } = currentFont();
@@ -783,7 +784,10 @@
     fontSelect.addEventListener("change", updatePreview);
     fontSizeInput.addEventListener("input", () => syncFontSize(fontSizeInput.value));
     fontSizeSlider.addEventListener("input", () => syncFontSize(fontSizeSlider.value));
-    input.addEventListener("input", updatePreview);
+    input.addEventListener("input", () => {
+      alignedResult = null;
+      updatePreview();
+    });
     cjkRatioInput.addEventListener("input", updatePreview);
     asciiRatioInput.addEventListener("input", updatePreview);
 
@@ -795,14 +799,14 @@
           statusEl.textContent = "フォントを選択してください。";
           return;
         }
-        input.value = alignMarkdownTable(input.value, family, size);
+        alignedResult = alignMarkdownTable(input.value, family, size);
       } else {
         const ratios = getManualRatios();
         if (!ratios) {
           showCopyFeedback("CJK と ASCII に 1 以上の整数を入力してください。");
           return;
         }
-        input.value = alignMarkdownTableManual(
+        alignedResult = alignMarkdownTableManual(
           input.value, ratios.cjk, ratios.ascii,
         );
       }
@@ -811,7 +815,7 @@
 
     copyBtn.addEventListener("click", async () => {
       try {
-        await navigator.clipboard.writeText(input.value);
+        await navigator.clipboard.writeText(alignedResult !== null ? alignedResult : input.value);
         showCopyFeedback("クリップボードにコピーしました。");
       } catch (e) {
         showCopyFeedback("コピーに失敗しました。手動で選択してください。");
