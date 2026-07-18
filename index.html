@@ -468,6 +468,7 @@
       if (!localFontsSupported) {
         statusEl.textContent =
           "このブラウザは Local Font Access API に対応していません（Chrome / Edge のデスクトップ版をお使いください）。手動比率モードをご利用ください。";
+        setActiveTab("manual");
       }
     }
 
