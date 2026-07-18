@@ -300,7 +300,7 @@
   <body>
     <header>
       <h1>MD Table Aligner</h1>
-      <p>ローカルフォントを使って、日英混在の等幅テーブルをプレビューしながら列幅を揃えます</p>
+      <p>日英混在の等幅テーブルをプレビューしながら列幅を揃えます</p>
     </header>
 
     <div class="content-wrapper">
@@ -346,9 +346,6 @@
               </div>
             </div>
           </div>
-          <p class="hint">
-            プレビューはブラウザ標準の等幅フォント（monospace）で表示されます。2:1 以外の比率（例: 3:5）では、見た目の揃いが完全一致しない場合があります。コピーされたテキスト自体は指定比率に基づき正しく整形されます。
-          </p>
         </div>
 
         <div class="common-controls">
@@ -392,8 +389,8 @@
     </div>
     </div>
 
-    <footer>
-      等幅判定・日英幅比は実際の描画幅を Canvas で測定して算出しています（フォントの内部フラグには依存しません）。
+    <footer id="footer">
+      フォント実測モード: 等幅判定・日英幅比は読み込まれたローカルフォントを使い実際の描画幅を Canvas で測定して算出します
     </footer>
 
     <script>
@@ -414,6 +411,7 @@
     const panelManual = document.getElementById("panelManual");
     const cjkRatioInput = document.getElementById("cjkRatio");
     const asciiRatioInput = document.getElementById("asciiRatio");
+    const footer = document.getElementById("footer");
 
     const localFontsSupported = !!window.queryLocalFonts;
     let activeTab = "font";
@@ -453,6 +451,9 @@
       previewLabel.textContent = isFont
         ? "プレビュー（選択フォントで表示）"
         : "プレビュー（monospace で表示）";
+      footer.textContent = isFont
+        ? "フォント実測モード: 等幅判定・日英幅比は読み込まれたローカルフォントを使い実際の描画幅を Canvas で測定して算出します"
+        : "手動比率モード: 入力された文字幅比率を元に整形されますがブラウザ標準の等幅フォントで表示されるプレビューでは見た目の揃いが完全一致しない場合があります";
       updatePreview();
     }
 
@@ -461,7 +462,7 @@
         tabFontBtn.disabled = true;
         tabFontBtn.classList.add("disabled");
         statusEl.textContent =
-          "このブラウザは Local Font Access API に対応していません（Chrome / Edge のデスクトップ版をお使いください）。手動比率タブをご利用ください。";
+          "このブラウザは Local Font Access API に対応していません（Chrome / Edge のデスクトップ版をお使いください）。手動比率モードをご利用ください。";
         loadFontsBtn.disabled = true;
       }
     }
