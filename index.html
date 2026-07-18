@@ -174,6 +174,10 @@
     .btn.secondary:hover {
       border-color: var(--text-dim);
     }
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
     .row2 {
       display: flex;
       gap: 8px;
@@ -439,7 +443,6 @@
     }
 
     function setActiveTab(tab) {
-      if (tab === "font" && !localFontsSupported) return;
       activeTab = tab;
       const isFont = tab === "font";
       tabFontBtn.classList.toggle("active", isFont);
@@ -454,16 +457,17 @@
       footer.textContent = isFont
         ? "フォント実測モード: 等幅判定・日英幅比は読み込まれたローカルフォントを使い実際の描画幅を Canvas で測定して算出します"
         : "手動比率モード: 入力された文字幅比率を元に整形されますがブラウザ標準の等幅フォントで表示されるプレビューでは見た目の揃いが完全一致しない場合があります";
+      if (!localFontsSupported) {
+        loadFontsBtn.disabled = isFont;
+        alignBtn.disabled = isFont;
+      }
       updatePreview();
     }
 
     function initBrowserSupport() {
       if (!localFontsSupported) {
-        tabFontBtn.disabled = true;
-        tabFontBtn.classList.add("disabled");
         statusEl.textContent =
           "このブラウザは Local Font Access API に対応していません（Chrome / Edge のデスクトップ版をお使いください）。手動比率モードをご利用ください。";
-        loadFontsBtn.disabled = true;
       }
     }
 
