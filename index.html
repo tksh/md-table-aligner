@@ -494,7 +494,7 @@
       try {
         const buffer = await blob.arrayBuffer();
         const view = new DataView(buffer);
-        if (buffer.byteLength < 12) return false;
+        if (buffer.byteLength < 12) return 'none';
 
         const signature = String.fromCharCode(
           view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3)
@@ -509,15 +509,16 @@
         } else if (signature === 'OTTO' || signature === '\0\1\0\0' || signature === 'true') {
           fontOffsets.push(0);
         } else {
-          return false;
+          return 'none';
         }
 
         for (const fontOffset of fontOffsets) {
-          if (checkFontCJK(view, fontOffset, buffer.byteLength)) return true;
+          const result = checkFontCJK(view, fontOffset, buffer.byteLength);
+          if (result !== 'none') return result;
         }
-        return false;
+        return 'none';
       } catch (e) {
-        return false;
+        return 'none';
       }
     }
 
@@ -538,103 +539,78 @@
 
     function checkFontCJK(view, fontOffset, bufferLength) {
       const os2Offset = findTableOffsetInFont(view, fontOffset, "OS/2", bufferLength);
+      let os2SaysCJK = false;
       if (os2Offset && os2Offset + 86 <= bufferLength) {
         const ur2 = view.getUint32(os2Offset + 46, false);
-        if ((ur2 & 0x08000000) !== 0 || (ur2 & 0x10000000) !== 0) return true;
-
         const cp1 = view.getUint32(os2Offset + 78, false);
         const CJK_MASK = (1 << 17) | (1 << 18) | (1 << 19) | (1 << 20) | (1 << 21);
-        if ((cp1 & CJK_MASK) !== 0) return true;
+        os2SaysCJK = ((ur2 & 0x08000000) !== 0) || ((ur2 & 0x10000000) !== 0) || ((cp1 & CJK_MASK) !== 0);
       }
+
+      if (!os2SaysCJK) return 'none';
 
       const cmapOffset = findTableOffsetInFont(view, fontOffset, "cmap", bufferLength);
-      if (cmapOffset && cmapOffset + 4 <= bufferLength) {
-        const numEncodingTables = view.getUint16(cmapOffset + 2);
-        const testCodePoints = [0x4E00, 0x4E2D, 0x56FD, 0x65E5, 0x672C];
-        let matchCount = 0;
+      if (!cmapOffset || cmapOffset + 4 > bufferLength) return 'none';
 
-        for (let i = 0; i < numEncodingTables; i++) {
-          const recordOffset = cmapOffset + 4 + i * 8;
-          if (recordOffset + 8 > bufferLength) break;
-          const platformID = view.getUint16(recordOffset);
-          const encodingID = view.getUint16(recordOffset + 2);
-          const subtableOffset = cmapOffset + view.getUint32(recordOffset + 4);
+      const numEncodingTables = view.getUint16(cmapOffset + 2);
+      let hasBMP = false;
+      let hasExtension = false;
 
-          if (platformID === 1 || platformID === 2) continue;
-          if (platformID === 3 && encodingID !== 1 && encodingID !== 10) continue;
-          if (subtableOffset + 2 > bufferLength) continue;
+      for (let i = 0; i < numEncodingTables; i++) {
+        const recordOffset = cmapOffset + 4 + i * 8;
+        if (recordOffset + 8 > bufferLength) break;
+        const platformID = view.getUint16(recordOffset);
+        const encodingID = view.getUint16(recordOffset + 2);
+        const subtableOffset = cmapOffset + view.getUint32(recordOffset + 4);
 
-          const format = view.getUint16(subtableOffset);
+        if (platformID === 1 || platformID === 2) continue;
+        if (platformID === 3 && encodingID !== 1 && encodingID !== 10) continue;
+        if (subtableOffset + 2 > bufferLength) continue;
 
-          if (format === 4) {
-            if (subtableOffset + 14 > bufferLength) continue;
-            const segCountX2 = view.getUint16(subtableOffset + 6);
-            const segCount = segCountX2 / 2;
-            const endCodeOffset = subtableOffset + 14;
-            const startCodeOffset = endCodeOffset + segCountX2 + 2;
-            const idDeltaOffset = startCodeOffset + segCountX2;
-            const idRangeOffsetOffset = idDeltaOffset + segCountX2;
+        const format = view.getUint16(subtableOffset);
 
-            if (idRangeOffsetOffset + segCountX2 > bufferLength) continue;
+        if (format === 4) {
+          if (subtableOffset + 14 > bufferLength) continue;
+          const segCountX2 = view.getUint16(subtableOffset + 6);
+          const segCount = segCountX2 / 2;
+          const endCodeOffset = subtableOffset + 14;
+          const startCodeOffset = endCodeOffset + segCountX2 + 2;
 
-            for (const codePoint of testCodePoints) {
-              for (let seg = 0; seg < segCount; seg++) {
-                const endCode = view.getUint16(endCodeOffset + seg * 2);
-                const startCode = view.getUint16(startCodeOffset + seg * 2);
+          for (let seg = 0; seg < segCount; seg++) {
+            const endCode = view.getUint16(endCodeOffset + seg * 2);
+            const startCode = view.getUint16(startCodeOffset + seg * 2);
 
-                if (codePoint >= startCode && codePoint <= endCode) {
-                  const idDelta = view.getInt16(idDeltaOffset + seg * 2);
-                  const idRangeOffset = view.getUint16(idRangeOffsetOffset + seg * 2);
-
-                  let glyphId;
-                  if (idRangeOffset === 0) {
-                    glyphId = (codePoint + idDelta) & 0xFFFF;
-                  } else {
-                    const glyphOffset = idRangeOffsetOffset + seg * 2 + idRangeOffset + (codePoint - startCode) * 2;
-                    if (glyphOffset + 2 <= bufferLength) {
-                      glyphId = view.getUint16(glyphOffset);
-                      if (glyphId !== 0) {
-                        glyphId = (glyphId + idDelta) & 0xFFFF;
-                      }
-                    } else {
-                      glyphId = 0;
-                    }
-                  }
-
-                  if (glyphId !== 0) {
-                    matchCount++;
-                    break;
-                  }
-                }
-              }
-            }
-          } else if (format === 12) {
-            if (subtableOffset + 16 > bufferLength) continue;
-            const numGroups = view.getUint32(subtableOffset + 12);
-
-            for (const codePoint of testCodePoints) {
-              for (let g = 0; g < numGroups; g++) {
-                const groupOffset = subtableOffset + 16 + g * 12;
-                if (groupOffset + 12 > bufferLength) break;
-                const startCharCode = view.getUint32(groupOffset);
-                const endCharCode = view.getUint32(groupOffset + 4);
-                const startGlyphID = view.getUint32(groupOffset + 8);
-
-                if (codePoint >= startCharCode && codePoint <= endCharCode) {
-                  const glyphId = startGlyphID + (codePoint - startCharCode);
-                  if (glyphId !== 0) {
-                    matchCount++;
-                  }
-                  break;
-                }
-              }
+            if (endCode >= 0x4E00 && startCode <= 0x9FFF) {
+              hasBMP = true;
+              break;
             }
           }
+        } else if (format === 12) {
+          if (subtableOffset + 16 > bufferLength) continue;
+          const numGroups = view.getUint32(subtableOffset + 12);
+
+          for (let g = 0; g < numGroups; g++) {
+            const groupOffset = subtableOffset + 16 + g * 12;
+            if (groupOffset + 12 > bufferLength) break;
+            const startCharCode = view.getUint32(groupOffset);
+            const endCharCode = view.getUint32(groupOffset + 4);
+
+            if (endCharCode >= 0x4E00 && startCharCode <= 0x9FFF) {
+              hasBMP = true;
+            }
+            if (endCharCode >= 0x20000) {
+              hasExtension = true;
+            }
+            if (hasBMP && hasExtension) break;
+          }
         }
-        if (matchCount >= 3) return true;
+
+        if (hasBMP && hasExtension) break;
       }
 
-      return false;
+      if (hasBMP) return 'cjk';
+      if (hasExtension) return 'cjk_ext';
+      return 'none';
     }
 
     function approximateFraction(x, maxDenom = 20) {
@@ -684,17 +660,17 @@
 
         for (const family of families) {
           const mono = isMonospaceAlphabet(family, size);
-          const hasJa = fontBlobs[family]
+          const cjkType = fontBlobs[family]
             ? await detectCJKSupport(fontBlobs[family])
-            : false;
+            : 'none';
           let ratio = null, ratioLabel = null;
-          if (mono && hasJa) {
+          if (mono && cjkType === 'cjk') {
             ratio = measureJaEnRatio(family, size);
             if (ratio && ratio > 1.05) {
               ratioLabel = approximateFraction(ratio, 20);
             }
           }
-          fontMeta[family] = { monospace: mono, hasJa, ratio, ratioLabel };
+          fontMeta[family] = { monospace: mono, cjkType, ratio, ratioLabel };
         }
 
         populateFontSelect(families);
@@ -710,37 +686,49 @@
     }
 
     function populateFontSelect(families) {
-      const monoJaFonts = families.filter((f) => fontMeta[f].monospace && fontMeta[f].hasJa)
+      const monoCJKFonts = families.filter((f) => fontMeta[f].monospace && fontMeta[f].cjkType === 'cjk')
         .sort((a, b) => a.localeCompare(b, "ja"));
-      const monoAsciiFonts = families.filter((f) => fontMeta[f].monospace && !fontMeta[f].hasJa)
+      const monoExtFonts = families.filter((f) => fontMeta[f].monospace && fontMeta[f].cjkType === 'cjk_ext')
+        .sort((a, b) => a.localeCompare(b, "ja"));
+      const monoASCIIFonts = families.filter((f) => fontMeta[f].monospace && fontMeta[f].cjkType === 'none')
         .sort((a, b) => a.localeCompare(b, "ja"));
       const propFonts = families.filter((f) => !fontMeta[f].monospace)
         .sort((a, b) => a.localeCompare(b, "ja"));
 
       fontSelect.innerHTML = "";
 
-      const monoJaGroup = document.createElement("optgroup");
-      monoJaGroup.label = `等幅（CJK対応） (${monoJaFonts.length})`;
-      for (const f of monoJaFonts) {
+      const monoCJKGroup = document.createElement("optgroup");
+      monoCJKGroup.label = `等幅（CJK対応） (${monoCJKFonts.length})`;
+      for (const f of monoCJKFonts) {
         const opt = document.createElement("option");
         opt.value = f;
         const label = fontMeta[f].ratioLabel
           ? `${f}  [日英 ${fontMeta[f].ratioLabel}]`
           : f;
         opt.textContent = label;
-        monoJaGroup.appendChild(opt);
+        monoCJKGroup.appendChild(opt);
       }
-      fontSelect.appendChild(monoJaGroup);
+      fontSelect.appendChild(monoCJKGroup);
 
-      const monoAsciiGroup = document.createElement("optgroup");
-      monoAsciiGroup.label = `等幅（ASCII のみ） (${monoAsciiFonts.length})`;
-      for (const f of monoAsciiFonts) {
+      const monoExtGroup = document.createElement("optgroup");
+      monoExtGroup.label = `等幅（CJK拡張専用） (${monoExtFonts.length})`;
+      for (const f of monoExtFonts) {
         const opt = document.createElement("option");
         opt.value = f;
         opt.textContent = f;
-        monoAsciiGroup.appendChild(opt);
+        monoExtGroup.appendChild(opt);
       }
-      fontSelect.appendChild(monoAsciiGroup);
+      fontSelect.appendChild(monoExtGroup);
+
+      const monoASCIIGroup = document.createElement("optgroup");
+      monoASCIIGroup.label = `等幅（ASCII のみ） (${monoASCIIFonts.length})`;
+      for (const f of monoASCIIFonts) {
+        const opt = document.createElement("option");
+        opt.value = f;
+        opt.textContent = f;
+        monoASCIIGroup.appendChild(opt);
+      }
+      fontSelect.appendChild(monoASCIIGroup);
 
       const propGroup = document.createElement("optgroup");
       propGroup.label = `プロポーショナル (${propFonts.length})`;
@@ -752,8 +740,9 @@
       }
       fontSelect.appendChild(propGroup);
 
-      if (monoJaFonts.length) fontSelect.value = monoJaFonts[0];
-      else if (monoAsciiFonts.length) fontSelect.value = monoAsciiFonts[0];
+      if (monoCJKFonts.length) fontSelect.value = monoCJKFonts[0];
+      else if (monoExtFonts.length) fontSelect.value = monoExtFonts[0];
+      else if (monoASCIIFonts.length) fontSelect.value = monoASCIIFonts[0];
     }
 
     function currentFont() {
