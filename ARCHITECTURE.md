@@ -17,10 +17,10 @@
 
 1. ユーザーの明示的なクリック（API 仕様上、ユーザーアクティベーションが必須）により `loadFonts()` を実行
 2. `window.queryLocalFonts()` を呼び出し、システムの全フォント（`FontData[]`）を取得
-3. 各 `FontData` について `blob()` で SFNT バイナリを取得し、`FontFace` として `document.fonts` に登録・ロード
+3. 各 `FontData` について `blob()` で SFNT バイナリを取得し、`FontFace` として `document.fonts` に登録・ロード。同時に blob を保持し、後述の CJK 判定に使用
    - 現在は `for...of` で逐次 `await` しているため、フォント数が非常に多い環境では読み込みに時間がかかる可能性がある（将来的に `Promise.all` で並列化する余地あり）
-4. `family` 名の重複を除いたユニークなリストに対して、後述の等幅判定・幅比計算を実行
-5. 結果を `<select>` に `<optgroup>` で分類して反映
+4. `family` 名の重複を除いたユニークなリストに対して、等幅判定・CJK 判定・幅比計算を実行
+5. 結果を `<select>` に `<optgroup>` で分類して反映（CJK対応 / CJK拡張専用 / ASCII のみ / プロポーショナル）
 
 ## 等幅判定アルゴリズム
 
@@ -42,7 +42,7 @@ function isMonospaceAlphabet(fontFamily, size) {
 
 ## 日英幅比の算出
 
-等幅と判定されたフォントについてのみ、ASCII 基準文字 `M` と全角基準文字 `あ` の実測幅から比率を算出します。
+CJK対応の等幅フォントについてのみ、ASCII 基準文字 `M` と全角基準文字 `あ` の実測幅から比率を算出します。
 
 ```js
 ratio = ctx.measureText('あ').width / ctx.measureText('M').width;
@@ -52,6 +52,31 @@ ratio = ctx.measureText('あ').width / ctx.measureText('M').width;
 - それ以外の場合、`approximateFraction()` により分母 1〜20 の範囲で最も誤差の小さい分数（例: `3:5`）に丸めてラベル化する
 
 `approximateFraction()` は連分数展開ではなく、**分母を 1 から 20 まで総当たりし、`ratio` との誤差が最小になる分数を選ぶ単純な力任せ探索**です。候補数が少なく計算コストも無視できるため、この方式で十分な精度が得られます。
+
+## CJK フォント判定
+
+等幅と判定されたフォントについて、CJK（中国語・日本語・韓国語）文字の有無を判定します。
+
+### 判定ロジック
+
+1. **OS/2 テーブルの確認**（最優先）
+   - `ulUnicodeRange` のビット 27（CJK Unified Ideographs）、ビット 28（CJK Extension A）を確認
+   - `ulCodePageRange` のビット 17〜21（日本語 932、簡体字中国語 936、韓国語 949、繁体字中国語 950）を確認
+   - OS/2 が CJK を示さない場合、即座に `none` を返す（高速パス）
+
+2. **cmap テーブルの確認**（OS/2 が CJK を示した場合のみ）
+   - Format 4 サブテーブル: セグメント範囲が BMP CJK（U+4E00〜U+9FFF）を含むか確認
+   - Format 12 サブテーブル: グループ範囲が BMP CJK または CJK 拡張（U+20000 以降）を含むか確認
+
+### 判定結果
+
+- `cjk`: BMP CJK 文字（U+4E00〜U+9FFF）を含む → 「等幅（CJK対応）」カテゴリ
+- `cjk_ext`: BMP は持たないが U+20000 以降（ExtB〜ExtG+）を含む → 「等幅（CJK拡張専用）」カテゴリ
+- `none`: CJK 文字を含まない → 「等幅（ASCII のみ）」カテゴリ
+
+### TTC (TrueType Collection) 対応
+
+MS Gothic、SimSun 等の Windows 標準フォントは TTC 形式で配布されています。`ttcf` シグネチャを検出し、含まれる各フォントについて個別に判定を行います。
 
 ## Markdown/Djot テーブルの解析・整形ロジック
 
